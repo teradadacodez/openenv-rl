@@ -1,0 +1,2 @@
+id: my_env_v4
+entrypoint: inference.py
