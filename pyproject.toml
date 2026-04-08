@@ -1,0 +1,8 @@
+[project]
+name = "openenv-agent"
+version = "0.1.0"
+description = "OpenEnv agent submission"
+requires-python = ">=3.10"
+
+[tool.openenv]
+entrypoint = "inference.py"
