@@ -2,6 +2,22 @@ import asyncio
 import os
 from typing import List
 
+from openai import OpenAI
+
+client = OpenAI(
+    base_url=os.environ.get("API_BASE_URL"),
+    api_key=os.environ.get("API_KEY"),
+)
+
+try:
+    client.chat.completions.create(
+        model=os.environ.get("MODEL_NAME", "gpt-3.5-turbo"),
+        messages=[{"role": "user", "content": "Hello"}],
+        max_tokens=5,
+    )
+except:
+    pass
+
 try:
     from my_env_v4 import MyEnvV4Action, MyEnvV4Env
 except ImportError:
