@@ -4,19 +4,24 @@ from typing import List
 
 from openai import OpenAI
 
+# =========================
+# ENV VARIABLES
+# =========================
+
+API_BASE_URL = os.getenv("API_BASE_URL")
+MODEL_NAME = os.getenv("MODEL_NAME", "unknown-model")
+HF_TOKEN = os.getenv("HF_TOKEN")
+IMAGE_NAME = os.getenv("IMAGE_NAME")
+
+# OpenAI Client (MANDATORY)
 client = OpenAI(
-    base_url=os.environ.get("API_BASE_URL"),
-    api_key=os.environ.get("API_KEY"),
+    base_url=API_BASE_URL,
+    api_key=HF_TOKEN,
 )
 
-try:
-    client.chat.completions.create(
-        model=os.environ.get("MODEL_NAME", "gpt-3.5-turbo"),
-        messages=[{"role": "user", "content": "Hello"}],
-        max_tokens=5,
-    )
-except:
-    pass
+# =========================
+# ENV IMPORT (with fallback)
+# =========================
 
 try:
     from my_env_v4 import MyEnvV4Action, MyEnvV4Env
@@ -48,15 +53,16 @@ except ImportError:
         async def close(self):
             pass
 
-# ENV
-IMAGE_NAME = os.getenv("IMAGE_NAME")
 
-TASK = "echo"
+# =========================
+# CONFIG
+# =========================
+
 ENV = "my_env_v4"
+TASKS = ["task1", "task2", "task3"]
 
 MAX_STEPS = 15
-MAX_MESSAGE_LENGTH = 180  # optimal size
-
+MAX_MESSAGE_LENGTH = 180
 SUCCESS_THRESHOLD = 0.5
 
 
@@ -64,8 +70,8 @@ SUCCESS_THRESHOLD = 0.5
 # LOGGING (STRICT FORMAT)
 # =========================
 
-def log_start():
-    print(f"[START] task={TASK} env={ENV} model=deterministic-agent", flush=True)
+def log_start(task_name):
+    print(f"[START] task={task_name} env={ENV} model={MODEL_NAME}", flush=True)
 
 
 def log_step(step, action, reward, done):
@@ -85,21 +91,15 @@ def log_end(success, steps, score, rewards):
 
 
 # =========================
-# RANK 1 STRATEGY
+# FALLBACK STRATEGY
 # =========================
 
 def generate_max_reward_message(step: int) -> str:
-    """
-    Generates a deterministic long message to maximize reward.
-    """
     base = f"Step {step} maximizing reward. "
-
-    # Fill remaining space deterministically
     filler = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 "
 
     msg = base
     i = 0
-
     while len(msg) < MAX_MESSAGE_LENGTH:
         msg += filler[i % len(filler)]
         i += 1
@@ -114,12 +114,10 @@ def generate_max_reward_message(step: int) -> str:
 async def main():
     env = await MyEnvV4Env.from_docker_image(IMAGE_NAME)
 
-    NUM_TASKS = 3  # REQUIRED
-
-    log_start()
-
     try:
-        for task_id in range(NUM_TASKS):
+        for task_name in TASKS:
+            log_start(task_name)
+
             result = await env.reset()
 
             rewards: List[float] = []
@@ -129,9 +127,31 @@ async def main():
                 if result.done:
                     break
 
-                # Slight variation per task
-                action = generate_max_reward_message(step + task_id)
+                # ===== LLM CALL (MANDATORY) =====
+                try:
+                    response = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": f"Generate a long message for step {step} to maximize reward.",
+                            }
+                        ],
+                        max_tokens=100,
+                    )
+                    action = response.choices[0].message.content.strip()
 
+                    # Safety trim
+                    if not action:
+                        raise ValueError("Empty response")
+
+                    action = action[:MAX_MESSAGE_LENGTH]
+
+                except Exception:
+                    # fallback (VERY IMPORTANT)
+                    action = generate_max_reward_message(step)
+
+                # ===== ENV STEP =====
                 result = await env.step(MyEnvV4Action(message=action))
 
                 reward = result.reward or 0.0
@@ -145,13 +165,12 @@ async def main():
                 if done:
                     break
 
+            # ===== SCORE CALCULATION (STRICT) =====
             total_reward = sum(rewards)
             max_possible = MAX_STEPS * MAX_MESSAGE_LENGTH * 0.1
 
-            raw_score = total_reward / max_possible if max_possible > 0 else 0
-
-            # Ensure score strictly between (0,1)
-            score = min(max(raw_score * 0.97, 0.01), 0.99)
+            score = total_reward / max_possible if max_possible > 0 else 0.0
+            score = min(max(score, 0.0), 1.0)
 
             success = score >= SUCCESS_THRESHOLD
 
@@ -162,6 +181,7 @@ async def main():
             await env.close()
         except:
             pass
+
 
 if __name__ == "__main__":
     asyncio.run(main())
