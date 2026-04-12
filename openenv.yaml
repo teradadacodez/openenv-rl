@@ -1,2 +1,16 @@
 id: my_env_v4
+
 entrypoint: inference.py
+
+tasks:
+  - id: task1
+    grader:
+      type: reward
+
+  - id: task2
+    grader:
+      type: reward
+
+  - id: task3
+    grader:
+      type: reward
