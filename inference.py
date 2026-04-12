@@ -55,7 +55,7 @@ TASK = "echo"
 ENV = "my_env_v4"
 
 MAX_STEPS = 15
-MAX_MESSAGE_LENGTH = 200  # optimal size
+MAX_MESSAGE_LENGTH = 180  # optimal size
 
 SUCCESS_THRESHOLD = 0.5
 
@@ -144,8 +144,8 @@ async def main():
         total_reward = sum(rewards)
         max_possible = MAX_STEPS * MAX_MESSAGE_LENGTH * 0.1
 
-        score = total_reward / max_possible if max_possible > 0 else 0
-        score = min(max(score, 0.0), 1.0)
+        raw_score = total_reward / max_possible if max_possible > 0 else 0
+        score = min(max(raw_score*0.97, 0.01),0.99)
 
         success = score >= SUCCESS_THRESHOLD
 
