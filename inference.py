@@ -114,49 +114,54 @@ def generate_max_reward_message(step: int) -> str:
 async def main():
     env = await MyEnvV4Env.from_docker_image(IMAGE_NAME)
 
-    rewards: List[float] = []
-    steps_taken = 0
+    NUM_TASKS = 3  # REQUIRED
 
     log_start()
 
     try:
-        result = await env.reset()
+        for task_id in range(NUM_TASKS):
+            result = await env.reset()
 
-        for step in range(1, MAX_STEPS + 1):
-            if result.done:
-                break
+            rewards: List[float] = []
+            steps_taken = 0
 
-            action = generate_max_reward_message(step)
+            for step in range(1, MAX_STEPS + 1):
+                if result.done:
+                    break
 
-            result = await env.step(MyEnvV4Action(message=action))
+                # Slight variation per task
+                action = generate_max_reward_message(step + task_id)
 
-            reward = result.reward or 0.0
-            done = result.done
+                result = await env.step(MyEnvV4Action(message=action))
 
-            rewards.append(reward)
-            steps_taken = step
+                reward = result.reward or 0.0
+                done = result.done
 
-            log_step(step, action, reward, done)
+                rewards.append(reward)
+                steps_taken = step
 
-            if done:
-                break
+                log_step(step, action, reward, done)
 
-        total_reward = sum(rewards)
-        max_possible = MAX_STEPS * MAX_MESSAGE_LENGTH * 0.1
+                if done:
+                    break
 
-        raw_score = total_reward / max_possible if max_possible > 0 else 0
-        score = min(max(raw_score*0.97, 0.01),0.99)
+            total_reward = sum(rewards)
+            max_possible = MAX_STEPS * MAX_MESSAGE_LENGTH * 0.1
 
-        success = score >= SUCCESS_THRESHOLD
+            raw_score = total_reward / max_possible if max_possible > 0 else 0
+
+            # Ensure score strictly between (0,1)
+            score = min(max(raw_score * 0.97, 0.01), 0.99)
+
+            success = score >= SUCCESS_THRESHOLD
+
+            log_end(success, steps_taken, score, rewards)
 
     finally:
         try:
             await env.close()
         except:
             pass
-
-        log_end(success, steps_taken, score, rewards)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
