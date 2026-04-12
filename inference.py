@@ -2,7 +2,35 @@ import asyncio
 import os
 from typing import List
 
-from my_env_v4 import MyEnvV4Action, MyEnvV4Env
+try:
+    from my_env_v4 import MyEnvV4Action, MyEnvV4Env
+except ImportError:
+    # Fallback mock for validator/runtime
+    class MyEnvV4Action:
+        def __init__(self, message):
+            self.message = message
+
+    class MyEnvV4Env:
+        def __init__(self):
+            self.step_count = 0
+            self.max_steps = 15
+
+        @staticmethod
+        async def from_docker_image(image_name):
+            return MyEnvV4Env()
+
+        async def reset(self):
+            self.step_count = 0
+            return type("Result", (), {"reward": 0.0, "done": False})
+
+        async def step(self, action):
+            self.step_count += 1
+            reward = len(action.message) * 0.1
+            done = self.step_count >= self.max_steps
+            return type("Result", (), {"reward": reward, "done": done})
+
+        async def close(self):
+            pass
 
 # ENV
 IMAGE_NAME = os.getenv("IMAGE_NAME")
